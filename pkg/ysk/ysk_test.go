@@ -39,6 +39,33 @@ func mockPublish(ctx context.Context, sourceID string, eventName string, body ma
 	}
 }
 
+// eventually: republish (idempotent) until cards with ids == want; replaces sleeps (flaky under load).
+// counts own ids only: in-memory repo = shared-cache DB, other tests' cards visible
+func eventually(t *testing.T, yskService *service.YSKService, ids []string, want int, publish func()) {
+	t.Helper()
+	deadline := time.Now().Add(10 * time.Second)
+	for {
+		publish()
+		cards, err := yskService.YskCardList(context.Background())
+		assert.NilError(t, err)
+		got := 0
+		for _, card := range cards {
+			for _, id := range ids {
+				if card.Id == id {
+					got++
+				}
+			}
+		}
+		if got == want {
+			return
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("cards %v = %d, want %d", ids, got, want)
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+}
+
 func TestUpdateProgress(t *testing.T) {
 	logger.LogInitConsoleOnly()
 
@@ -47,37 +74,26 @@ func TestUpdateProgress(t *testing.T) {
 	ws = wsService
 
 	yskService.Start(false)
-	// wait for the service to start
-	time.Sleep(1 * time.Second)
 
-	err := ysk.NewYSKCard(context.Background(), utils.ApplicationInstallProgress.WithTaskContent(
-		"jellyfin logo",
-		"Installing LinuxServer/Jellyfin",
-	).WithProgress(
-		"Installing LinuxServer/Jellyfin", 25,
-	), mockPublish)
-	assert.NilError(t, err)
+	eventually(t, yskService, []string{utils.ApplicationInstallProgress.Id}, 1, func() {
+		err := ysk.NewYSKCard(context.Background(), utils.ApplicationInstallProgress.WithTaskContent(
+			"jellyfin logo",
+			"Installing LinuxServer/Jellyfin",
+		).WithProgress(
+			"Installing LinuxServer/Jellyfin", 25,
+		), mockPublish)
+		assert.NilError(t, err)
 
-	err = ysk.NewYSKCard(context.Background(), utils.ApplicationInstallProgress.WithProgress(
-		"Installing LinuxServer/Jellyfin", 50,
-	), mockPublish)
-	assert.NilError(t, err)
+		err = ysk.NewYSKCard(context.Background(), utils.ApplicationInstallProgress.WithProgress(
+			"Installing LinuxServer/Jellyfin", 50,
+		), mockPublish)
+		assert.NilError(t, err)
+	})
 
-	time.Sleep(1 * time.Second)
-
-	cards, err := yskService.YskCardList(context.Background())
-	assert.NilError(t, err)
-	assert.Equal(t, len(cards), 1)
-
-	assert.NilError(t, err)
-	err = ysk.DeleteCard(context.Background(), utils.ApplicationInstallProgress.Id, mockPublish)
-	assert.NilError(t, err)
-
-	time.Sleep(1 * time.Second)
-
-	cards, err = yskService.YskCardList(context.Background())
-	assert.NilError(t, err)
-	assert.Equal(t, len(cards), 0)
+	eventually(t, yskService, []string{utils.ApplicationInstallProgress.Id}, 0, func() {
+		err := ysk.DeleteCard(context.Background(), utils.ApplicationInstallProgress.Id, mockPublish)
+		assert.NilError(t, err)
+	})
 }
 
 func TestLongAndShortNoticeInsert(t *testing.T) {
@@ -88,17 +104,11 @@ func TestLongAndShortNoticeInsert(t *testing.T) {
 	ws = wsService
 
 	yskService.Start(false)
-	// wait for the service to start
-	time.Sleep(1 * time.Second)
 
-	err := ysk.NewYSKCard(context.Background(), utils.ZimaOSDataStationNotice, mockPublish)
-	assert.NilError(t, err)
-	err = ysk.NewYSKCard(context.Background(), utils.ApplicationUpdateNotice, mockPublish)
-	assert.NilError(t, err)
-
-	time.Sleep(1 * time.Second)
-
-	cards, err := yskService.YskCardList(context.Background())
-	assert.NilError(t, err)
-	assert.Equal(t, len(cards), 1)
+	eventually(t, yskService, []string{utils.ZimaOSDataStationNotice.Id, utils.ApplicationUpdateNotice.Id}, 1, func() {
+		err := ysk.NewYSKCard(context.Background(), utils.ZimaOSDataStationNotice, mockPublish)
+		assert.NilError(t, err)
+		err = ysk.NewYSKCard(context.Background(), utils.ApplicationUpdateNotice, mockPublish)
+		assert.NilError(t, err)
+	})
 }
