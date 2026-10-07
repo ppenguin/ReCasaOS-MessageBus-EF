@@ -127,6 +127,10 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
+	// socket skips auth (route.fromUnixSocket) → root-only, regardless of umask
+	if err := os.Chmod(unixSocketPath, 0o600); err != nil {
+		panic(err)
+	}
 
 	// register at gateway
 	u, err := url.Parse(swagger.Servers[0].URL)

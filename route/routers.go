@@ -2,6 +2,7 @@ package route
 
 import (
 	"crypto/ecdsa"
+	"net"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -39,8 +40,8 @@ func NewAPIRouter(swagger *openapi3.T, services *service.Services) (http.Handler
 
 	e.Use(echo_middleware.JWTWithConfig(echo_middleware.JWTConfig{
 		Skipper: func(c echo.Context) bool {
-			// skip when source is unix socket
-			if c.Request().Host == "unix" {
+			// skip when the request really arrived on the unix socket listener
+			if fromUnixSocket(c.Request()) {
 				return true
 			}
 
@@ -81,6 +82,13 @@ func NewAPIRouter(swagger *openapi3.T, services *service.Services) (http.Handler
 	codegen.RegisterHandlersWithBaseURL(e, apiRoute, apiPath)
 
 	return e, nil
+}
+
+// fromUnixSocket: request arrived on the unix listener (root-only, main.go).
+// From the connection, not the Host header (client-chosen, forwarded by the gateway).
+func fromUnixSocket(r *http.Request) bool {
+	addr, ok := r.Context().Value(http.LocalAddrContextKey).(net.Addr)
+	return ok && addr.Network() == "unix"
 }
 
 func NewDocRouter(swagger *openapi3.T, docHTML string, docYAML string) (http.Handler, error) {
