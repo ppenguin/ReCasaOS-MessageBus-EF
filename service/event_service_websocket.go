@@ -25,8 +25,15 @@ type EventServiceWS struct {
 var mutex = &sync.Mutex{}
 
 func (s *EventServiceWS) Publish(event model.Event) {
-	if s.inboundChannel == nil {
+	// Start runs in a goroutine, sets both under the lock; before that: drop (no nil-ctx panic)
+	inboundChannel, ctx := func() (chan model.Event, *context.Context) {
+		mutex.Lock()
+		defer mutex.Unlock()
+		return s.inboundChannel, s.ctx
+	}()
+	if inboundChannel == nil || ctx == nil {
 		logger.Error("error when publishing event via websocket", zap.Error(ErrInboundChannelNotFound))
+		return
 	}
 
 	if event.Timestamp == 0 {
@@ -36,10 +43,10 @@ func (s *EventServiceWS) Publish(event model.Event) {
 	// TODO - ensure properties are valid for event type
 
 	select {
-	case s.inboundChannel <- event:
+	case inboundChannel <- event:
 
-	case <-(*s.ctx).Done():
-		if err := (*s.ctx).Err(); err != nil {
+	case <-(*ctx).Done():
+		if err := (*ctx).Err(); err != nil {
 			logger.Info(err.Error())
 		}
 		return
@@ -136,7 +143,10 @@ func (s *EventServiceWS) Start(ctx *context.Context) {
 		s.ctx = ctx
 
 		s.inboundChannel = make(chan model.Event)
-		s.subscriberChannels = make(map[string]map[string][]chan model.Event)
+		// keep subscriptions made before Start (YSK subscribes right after Services.Start)
+		if s.subscriberChannels == nil {
+			s.subscriberChannels = make(map[string]map[string][]chan model.Event)
+		}
 		s.stop = make(chan struct{})
 	}()
 
