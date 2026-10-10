@@ -74,7 +74,7 @@ func NewAPIRouter(swagger *openapi3.T, services *service.Services) (http.Handler
 		},
 		TokenLookupFuncs: []echo_middleware.ValuesExtractor{
 			func(c echo.Context) ([]string, error) {
-				return []string{c.Request().Header.Get(echo.HeaderAuthorization)}, nil
+				return []string{authorizationToken(c.Request().Header.Get(echo.HeaderAuthorization))}, nil
 			},
 		},
 	}))
