@@ -298,14 +298,13 @@ paths:
     post:
       summary: Issue a subscription ticket
       description: |
-        Browsers cannot set an `Authorization` header on a WebSocket, and tokens are never accepted
-        in URLs (they leak into logs, history and referers). A browser therefore asks for a ticket
-        first, with its normal `Authorization` header, and then opens the subscription.
+        Browser WebSockets: no `Authorization` header possible; tokens never in URLs (logs, history, referers).
 
-        The ticket is returned only as a cookie: random, valid for one subscription handshake and
-        at most 30 seconds, bound to the user and User-Agent, `HttpOnly`, `SameSite=Strict`, and
-        scoped to this API's path, so the browser sends it with the WebSocket handshake and nowhere
-        else. The same pattern as the root service's SSH terminal login.
+        - request: normal `Authorization` header
+        - response: ticket as cookie only: random, one handshake, ≤ 30 s, bound to user + User-Agent,
+          `HttpOnly`, `SameSite=Strict`, scoped to this API's path
+        - then: open the subscription; the handshake carries the cookie
+        - same pattern as the root service's SSH terminal login
       operationId: issueSubscriptionTicket
       tags:
         - SocketIO Endpoints
