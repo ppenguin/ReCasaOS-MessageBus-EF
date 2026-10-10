@@ -124,7 +124,10 @@ func (s *ActionServiceWS) Start(ctx *context.Context) {
 	s.mutex = sync.Mutex{}
 
 	s.inboundChannel = make(chan model.Action)
-	s.subscriberChannels = make(map[string]map[string][]chan model.Action)
+	// keep subscriptions made before Start (see EventServiceWS.Start)
+	if s.subscriberChannels == nil {
+		s.subscriberChannels = make(map[string]map[string][]chan model.Action)
+	}
 	s.stop = make(chan struct{})
 
 	defer func() {
