@@ -12,6 +12,7 @@ import (
 	"github.com/IceWhaleTech/CasaOS-Common/utils/jwt"
 	"github.com/IceWhaleTech/CasaOS-MessageBus/codegen"
 	"github.com/IceWhaleTech/CasaOS-MessageBus/config"
+	"github.com/IceWhaleTech/CasaOS-MessageBus/pkg/gatewayclient"
 	"github.com/IceWhaleTech/CasaOS-MessageBus/service"
 	"github.com/deepmap/oapi-codegen/pkg/middleware"
 	"github.com/getkin/kin-openapi/openapi3"
@@ -45,7 +46,9 @@ func NewAPIRouter(swagger *openapi3.T, services *service.Services) (http.Handler
 				return true
 			}
 
-			if c.RealIP() == "::1" || c.RealIP() == "127.0.0.1" {
+			// loopback ≠ identity: in-stack callers also present the gateway service credential
+			if (c.RealIP() == "::1" || c.RealIP() == "127.0.0.1") &&
+				gatewayclient.ServiceAuthorizationMatches(config.CommonInfo.RuntimePath, c.Request().Header.Get(echo.HeaderAuthorization)) {
 				return true
 			}
 
