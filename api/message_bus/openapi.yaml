@@ -294,6 +294,29 @@ paths:
           description: |
             The connection will be upgraded to a WebSocket connection and the client will receive actions as they are triggered.
 
+  /ticket:
+    post:
+      summary: Issue a subscription ticket
+      description: |
+        Browser WebSockets: no `Authorization` header possible; tokens never in URLs (logs, history, referers).
+
+        - request: normal `Authorization` header
+        - response: ticket as cookie only: random, one handshake, ≤ 30 s, bound to user + User-Agent,
+          `HttpOnly`, `SameSite=Strict`, scoped to this API's path
+        - then: open the subscription; the handshake carries the cookie
+        - same pattern as the root service's SSH terminal login
+      operationId: issueSubscriptionTicket
+      tags:
+        - SocketIO Endpoints
+        - Websocket Endpoints
+      responses:
+        "204":
+          description: Ticket issued in the `Set-Cookie` header.
+        "403":
+          $ref: "#/components/responses/ResponseForbidden"
+        "429":
+          $ref: "#/components/responses/ResponseTooManyRequests"
+
   /socket.io:
     get:
       summary: Subscribe to events and actions (SocketIO)
@@ -524,6 +547,24 @@ components:
             $ref: "#/components/schemas/BaseResponse"
           example:
             message: "Conflict"
+
+    ResponseForbidden:
+      description: Forbidden
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/BaseResponse"
+          example:
+            message: "Forbidden"
+
+    ResponseTooManyRequests:
+      description: Too Many Requests
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/BaseResponse"
+          example:
+            message: "Too Many Requests"
 
     GetEventTypesOK:
       description: OK

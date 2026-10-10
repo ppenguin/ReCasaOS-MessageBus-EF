@@ -52,6 +52,15 @@ func NewAPIRouter(swagger *openapi3.T, services *service.Services) (http.Handler
 				return true
 			}
 
+			// a browser's WebSocket subscription with a one-use ticket (ticket.go)
+			if isSubscriptionHandshake(c) {
+				if userID, ok := subscriptionTickets.consume(c.Request()); ok {
+					c.Request().Header.Set("user_id", userID)
+					return true
+				}
+			}
+
+			// TODO(tickets): removed once the dashboard sends a ticket
 			if c.Request().Method == echo.GET && c.Request().Header.Get(echo.HeaderUpgrade) == "websocket" {
 				return true
 			}
