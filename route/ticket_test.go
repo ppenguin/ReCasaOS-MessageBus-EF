@@ -69,11 +69,13 @@ func TestSubscriptionTicketsAreBounded(t *testing.T) {
 }
 
 // newTicketTestRouter: real router + user service serving JWKS + access token for user 7
+// one key pair for all tests: CasaOS-Common caches the public key process-wide
+var ticketTestKey, _, _ = jwt.GenerateKeyPair()
+
 func newTicketTestRouter(t *testing.T) (http.Handler, string) {
 	t.Helper()
-	privateKey, publicKey, err := jwt.GenerateKeyPair()
-	assert.NilError(t, err)
-	jwks, err := jwt.GenerateJwksJSON(publicKey)
+	privateKey := ticketTestKey
+	jwks, err := jwt.GenerateJwksJSON(&privateKey.PublicKey)
 	assert.NilError(t, err)
 	userService := httptest.NewServer(jwt.JWKSHandler(jwks))
 	t.Cleanup(userService.Close)
@@ -136,4 +138,20 @@ func TestSubscriptionTicketThroughTheRouter(t *testing.T) {
 	serve(router, handshake(&http.Cookie{Name: cookie.Name, Value: cookie.Value}))
 	_, ok := subscriptionTickets.consume(ticketRequest(cookie.Value, "browser"))
 	assert.Assert(t, !ok, "the handshake did not redeem the ticket")
+}
+
+// no ticket / user token / in-stack credential → handshake refused
+func TestSubscriptionHandshakeNeedsATicket(t *testing.T) {
+	router, token := newTicketTestRouter(t)
+	subscriptionTickets = newSubscriptionTicketRegistry()
+
+	assert.Equal(t, serve(router, handshake(nil)).Code, http.StatusUnauthorized)
+	assert.Equal(t, serve(router, handshake(&http.Cookie{Name: subscriptionTicketCookie, Value: "forged"})).Code, http.StatusUnauthorized)
+
+	request := httptest.NewRequest(http.MethodPost, "/v2/message_bus/ticket", nil)
+	request.Header.Set("Authorization", token)
+	cookie := serve(router, request).Result().Cookies()[0]
+	ticket := &http.Cookie{Name: cookie.Name, Value: cookie.Value}
+	assert.Assert(t, serve(router, handshake(ticket)).Code != http.StatusUnauthorized, "a ticketed handshake was refused")
+	assert.Equal(t, serve(router, handshake(ticket)).Code, http.StatusUnauthorized, "a replayed ticket")
 }

@@ -60,11 +60,6 @@ func NewAPIRouter(swagger *openapi3.T, services *service.Services) (http.Handler
 				}
 			}
 
-			// TODO(tickets): removed once the dashboard sends a ticket
-			if c.Request().Method == echo.GET && c.Request().Header.Get(echo.HeaderUpgrade) == "websocket" {
-				return true
-			}
-
 			return false
 		},
 		ParseTokenFunc: func(token string, c echo.Context) (interface{}, error) {
